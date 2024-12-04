@@ -58,7 +58,7 @@ M._settings = {
     return lines
   end,
   notifications = {
-    show_after_done = true,
+    show_after_done = false,
     task_started = true,
     task_completed = true,
     border = {
