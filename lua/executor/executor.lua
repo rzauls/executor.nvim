@@ -58,6 +58,7 @@ M._settings = {
     return lines
   end,
   notifications = {
+    show_after_done = true,
     task_started = true,
     task_completed = true,
     border = {
@@ -247,8 +248,14 @@ M._on_exit = function(_, exit_code)
   if M._settings.notifications.task_completed then
     if exit_code > 0 then
       M._show_notification("✖  Task errored", true)
+      if M._settings.notifications.show_after_done then
+        M.show_detail()
+      end
     else
       M._show_notification("✓ Task success!", true)
+      if M._settings.notifications.show_after_done then
+        M.show_detail()
+      end
     end
   end
   -- Force the statusline to redraw.
