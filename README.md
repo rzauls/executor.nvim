@@ -100,7 +100,7 @@ Available commands:
   stored command. Useful if your last run was a while ago, and the status
   output on your statusline is no longer relevant.
 
-- `ExecutorOneOff [cmd]`: runs the provided command and shows the results, but does not overwrite your stored command.
+- `ExecutorOneOff [cmd]`: runs the provided command and shows the results, but does not overwrite your stored command. Call this without a `cmd` to be prompted. This command will not be stored for future runs.
 
 These options are all available via the Lua API also:
 
@@ -136,6 +136,25 @@ vim.keymap.set("n", "<leader>er", function()
   executor.commands.run()
 end)
 ```
+
+## Placeholder values
+
+When entering a command into Executor, you can use the string `$E_FN` as a placeholder for "the current buffer's file name".
+
+When the command is executed it will be replaced by the path to the current buffer, **relative to Neovim's current working directory**.
+
+For example:
+
+* if your CWD is `~/git/foo` 
+* and you are editing `~/git/foo/app/app.test.ts`
+* if you give Executor the command `npm run test --file=$E_FN`
+
+It will run `npm run test --file=app/app.test.ts`.
+
+The placeholder is replaced at execution time, every time, so if you then navigate to `app/util.test.ts` and run the same command, you will run `npm run test --file=app/util.test.ts`.
+
+If there are other placeholder values that would be useful to you, please raise an issue.
+
 
 ## Configuration
 

@@ -18,6 +18,7 @@ local Split = require("nui.split")
 local event = require("nui.utils.autocmd").event
 
 local Output = require("executor.output")
+local Template = require("executor.template")
 
 local M = {}
 
@@ -90,8 +91,10 @@ M.trigger_set_command_input = function(initial_input_value, callback_fn)
     prompt = "[Executor.nvim] enter a command to run: ",
     default = initial_input_value or "",
   }, function(choice)
-    M.set_task_command(choice)
-    callback_fn()
+    if M._state.in_one_off_mode == false then
+      M.set_task_command(choice)
+    end
+    callback_fn(choice)
   end)
 end
 
@@ -100,13 +103,16 @@ M._state = {
   running = false,
   last_stdout = nil,
   last_exit_code = nil,
-  -- Updated with the last command that was run. This will be
-  -- updated for one_off tasks
+  -- Updated with the last command that was run.
+  --This will not be updated for one_off tasks
   last_command = nil,
-  last_command_was_one_off = false,
+  -- Last command with any placeholders updated.
+  last_command_resolved = nil,
+  in_one_off_mode = false,
   showing_detail = false,
   notification_timer = nil,
   command_history = {},
+  last_active_buf_id = nil,
 }
 
 M.reset = function()
@@ -114,8 +120,10 @@ M.reset = function()
   M._state.last_stdout = nil
   M._state.running = false
   M._stored_task_command = nil
-  M._state.last_command_was_one_off = false
+  M._state.in_one_off_mode = false
   M._state.last_command = nil
+  M._state.last_command_resolved = nil
+  M._state.last_active_buf_id = nil
 end
 
 M.set_task_command = function(cmd)
@@ -288,6 +296,11 @@ M._show_notification = function(text, timeout)
   end
 end
 
+-- TODO: move this somewhere else
+local function get_relative_buffer_name(buf_id)
+  return vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buf_id), ":.")
+end
+
 M.run_task = function(one_off_command)
   if M._popup ~= nil then
     M._popup:unmount()
@@ -306,16 +319,22 @@ M.run_task = function(one_off_command)
     return
   end
   M._state.last_command = cmd
-  M._state.last_command_was_one_off = one_off_command ~= nil
 
   M._state.running = true
   if M._settings.notifications.task_started then
-    M._show_notification("⟳ " .. M._stored_task_command, false)
+    M._show_notification("⟳ " .. cmd, false)
   end
   -- Force the statusline to redraw.
   vim.api.nvim_exec([[let &stl=&stl]], false)
 
-  vim.fn.jobstart(cmd, {
+  local final_cmd = cmd
+  if Template.has_placeholder(cmd) then
+    local file_name = get_relative_buffer_name(M._state.last_active_buf_id)
+    final_cmd = Template.replace_placeholders(cmd, file_name)
+  end
+  M._state.last_command_resolved = final_cmd
+
+  vim.fn.jobstart(final_cmd, {
     -- pty means that stderr is ignored, and all output goes to stdout, so
     -- that's why stderr is ignored here.
     pty = true,
@@ -334,7 +353,7 @@ M._show_popup = function()
   end
 
   if M._popup == nil then
-    local title = "Finished: " .. M._state.last_command
+    local title = "Finished: " .. M._state.last_command_resolved
     local output = Output.output_for_state(M._state)
 
     if M._state.last_exit_code > 0 then
@@ -407,11 +426,21 @@ M.hide_detail = function()
   end
 end
 
-M.run = function(one_off_command)
-  if one_off_command ~= nil then
-    M.run_task(one_off_command)
-    return
+M.run_one_off_cmd = function(predefined_cmd)
+  M._state.in_one_off_mode = true
+  if predefined_cmd ~= nil then
+    M.run_task(predefined_cmd)
+  else
+    M.trigger_set_command_input("", function(cmd)
+      M.run_task(cmd)
+    end)
   end
+end
+
+M.run = function()
+  M._state.in_one_off_mode = false
+  M._state.last_active_buf_id = vim.api.nvim_get_current_buf()
+
   if M._stored_task_command == nil then
     M.trigger_set_command_input("", function()
       M.run_task()
