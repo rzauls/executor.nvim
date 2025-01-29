@@ -191,6 +191,10 @@ M._make_popup = function(title, lines)
   M._popup:mount()
   Output.write_data(M._stored_task_command, M._popup.bufnr, M._settings.output_filter, lines)
 
+  M._popup:map("n", "q", function()
+    M.hide_detail()
+  end)
+
   -- Ensure if the user uses :q or similar to destroy it, that we tidy up.
   M._popup:on({ event.BufWinLeave }, function()
     vim.schedule(function()
